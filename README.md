@@ -1,1 +1,1 @@
-# Cistanthe-longsicapa-genome
+# Cistanthe-longiscapa-genome
