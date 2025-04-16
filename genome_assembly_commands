@@ -1,0 +1,44 @@
+##P Raimondeau## Commands used for Hifi_HiC genome assembly and annotation with isoseq data
+###############
+###ASSEMBLY####
+###############
+#Assembly with hifiasm combining Hifi and HiC data
+hifiasm 
+#Map HiC data on this assembly and filter bad quality alignments
+bwa mem -t 12 -A1 -B4 -E50 -L0 primary_assembly.fa ../GC3F-AC-8132---7423_S1_L001_R1_001.fastq.gz 2>> mate_R1.log | samtools view -Shb - > prim_R1.bam
+samtools view -h prim_R1.bam | perl filter_five_end.pl | samtools view -Sb - > prim_fil_R1.bam
+bwa mem -t 12 -A1 -B4 -E50 -L0 primary_assembly.fa ../GC3F-AC-8132---7423_S1_L001_R2_001.fastq.gz 2>> mate_R2.log | samtools view -Shb - > prim_R2.bam
+samtools view -h prim_R2.bam | perl filter_five_end.pl | samtools view -Sb - > prim_fil_R2.bam
+perl two_read_bam_combiner.pl prim_fil_R1.bam prim_fil_R2.bam samtools 10 | samtools view -bS -t prim.fa.fai - | samtools sort -@ 12 -o hic.bam
+##Scaffold assembly using YAHS and HiC data (can do several rounds)
+yahs primary_assembly.fa hic.bam
+##Use Juicer to generate contact maps and prepare assembly to be edited in juicebox
+../juicer pre -a -o out_JBAT yahs.out.bin yahs.out_scaffolds_final.agp yahs.out_scaffolds_final.fa.fai > out_JBAT.log 2>&1
+#Scripts from https://bitbucket.org/bredeson/artisanal/src/master/src/ for juicebox prep and output
+assembly-from-fasta.py
+assembly-to-fasta.py
+
+##################
+##ANNOTATION######
+##################
+#Map isoseq reads (flnc, corrected) to the assembly
+samtools convert flnc.bam to fastq
+minimap2 -t${T} -ax splice:hq -uf genome.fa isoseq.fq > isoseq.sam     
+samtools view -bS --threads ${T} isoseq.sam -o isoseq.bam
+#BRAKER3 fork with isoseq docker://teambraker/braker3:isoseq
+singularity build braker3_lr.sif 
+singularity exec -B ${PWD}:${PWD} braker3_lr.sif braker.pl --genome=genome.fa --prot_seq=protein_db.fa –-bam=isoseq.bam --threads=${T} 
+### 
+busco -i genome.fa -l eudicots_odb10 -m genome -o genome -c 4
+busco -i genome.cds -l eudicots_odb10 -m transcriptome -o cds -c 4
+EDTA.pl -genome genome.fasta -t 20 -anno 1
+singularity exec -B /home/pr533/scratch60/.apptainer/interproscan-5.67-99.0/data:/opt/interproscan/data \
+    -B $PWD/output:/output \
+    -B $PWD/temp:/temp \
+    interproscan_latest.sif \
+    /opt/interproscan/interproscan.sh \
+    --input cds.fa \
+    --disable-precalc --goterms --pathways --iprlookup \
+    --output-dir /output \
+    --tempdir /temp \
+    --cpu 16 
