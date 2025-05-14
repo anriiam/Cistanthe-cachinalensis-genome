@@ -7,4 +7,4 @@ The file MASTER_commands contains the sequence of commands used, including calls
 
 We also provide a python script to generate and extract upstream/downstream sequence from a target feature in a gff file, as used in the manuscript to identify regulatory motifs. 
 
-Finally, the gene annotation of Cistanthe cachinalensis is provided in gff format.
+Finally, the gene annotation of Cistanthe cachinalensis is provided in gff format (zipped).
